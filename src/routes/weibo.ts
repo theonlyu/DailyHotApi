@@ -19,42 +19,44 @@ export const handleRoute = async (_: undefined, noCache: boolean) => {
 };
 
 const getList = async (noCache: boolean) => {
-  const url =
-    "https://m.weibo.cn/api/container/getIndex?containerid=106003type%3D25%26t%3D3%26disable_hot%3D1%26filter_type%3Drealtimehot&title=%E5%BE%AE%E5%8D%9A%E7%83%AD%E6%90%9C&extparam=filter_type%3Drealtimehot%26mi_cid%3D100103%26pos%3D0_0%26c_type%3D30%26display_time%3D1540538388&luicode=10000011&lfid=231583";
+  // 使用新的 API 接口 - 这个接口无需登录
+  const url = "https://weibo.com/ajax/side/hotSearch";
 
   const result = await get({
     url,
     noCache,
     ttl: 60,
     headers: {
-      Referer: "https://s.weibo.com/top/summary?cate=realtimehot",
-      "MWeibo-Pwa": "1",
-      "X-Requested-With": "XMLHttpRequest",
-      "User-Agent":
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 11_0 like Mac OS X) AppleWebKit/604.1.38 (KHTML, like Gecko) Version/11.0 Mobile/15A372 Safari/604.1",
+      Referer: "https://weibo.com",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
     },
   });
-  const list = result.data.data.cards?.[0]?.card_group;
+
+  // 添加数据验证和错误处理
+  if (!result?.data?.data?.realtime) {
+    console.error("Weibo API response structure error:", JSON.stringify(result, null, 2));
+    return {
+      ...result,
+      data: [],
+    };
+  }
+
+  const list = result.data.data.realtime;
+  
   return {
     ...result,
     data: list
-      .filter(
-        (v: RouterType["weibo"]) =>
-          !(
-            v?.pic === "https://simg.s.weibo.com/20210408_search_point_orange.png" &&
-            config.FILTER_WEIBO_ADVERTISEMENT
-          ),
-      )
-      .map((v: RouterType["weibo"]) => {
-        const key = v.word_scheme ?? `#${v.desc}`;
+      .filter((v: any) => v && v.word)
+      .map((v: any, index: number) => {
+        const key = v.word_scheme ?? `#${v.word}`;
         return {
-          id: v.itemid,
-          title: v.desc,
+          id: v.mid || `${index}`,
+          title: v.word,
           desc: key,
-          timestamp: getTime(v.onboard_time),
-          hot: v.desc_extr,
+          timestamp: null, // 新接口不提供时间戳
+          hot: v.num || v.raw_hot,
           url: `https://s.weibo.com/weibo?q=${encodeURIComponent(key)}&t=31&band_rank=1&Refer=top`,
-          mobileUrl: v?.scheme,
+          mobileUrl: `https://m.weibo.cn/search?containerid=100103type=1&q=${encodeURIComponent(key)}`,
         };
       }),
   };
